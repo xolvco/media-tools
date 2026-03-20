@@ -13,7 +13,9 @@ requires-python = ">=3.11"
 dependencies = []  # ffprobe/ffmpeg expected on PATH; no hard Python deps
 
 [project.optional-dependencies]
-dev = ["pytest", "pytest-cov"]
+download = ["yt-dlp>=2024.1.1"]
+dev = ["pytest", "pytest-cov", "ruff"]
+all = ["yt-dlp>=2024.1.1"]
 
 [project.scripts]
 mediatools = "mediatools.cli:main"

@@ -64,10 +64,45 @@ class MediaFile:
         from mediatools.audio import extract_audio
         return extract_audio(self.path, output, **kwargs)
 
+    def convert_to_mp3(self, output: str | Path | None = None, **kwargs) -> Path:
+        """Convert to MP3.  See :func:`mediatools.convert.convert_to_mp3`."""
+        from mediatools.convert import convert_to_mp3
+        return convert_to_mp3(self.path, output, **kwargs)
+
+    def convert_audio(self, output: str | Path | None = None, fmt: str = "mp3", **kwargs) -> Path:
+        """Convert to an audio format.  See :func:`mediatools.convert.convert_audio`."""
+        from mediatools.convert import convert_audio
+        return convert_audio(self.path, output, fmt=fmt, **kwargs)
+
     def clip(self, output: str | Path, start_ms: int, end_ms: int, **kwargs) -> Path:
         """Clip the file from *start_ms* to *end_ms*.  See :func:`mediatools.video.clip`."""
         from mediatools.video import clip
         return clip(self.path, output, start_ms=start_ms, end_ms=end_ms, **kwargs)
+
+    def generate_thumbnails_at(
+        self,
+        timestamps: list[int] | str | Path,
+        output_dir: str | Path | None = None,
+        **kwargs,
+    ) -> list[Path] | Path:
+        """Generate thumbnails at specific timestamps (ms list or JSON file).
+        See :func:`mediatools.thumbnails.generate_thumbnails_at`."""
+        from mediatools.thumbnails import generate_thumbnails_at
+        return generate_thumbnails_at(self.path, timestamps, output_dir, **kwargs)
+
+    def generate_thumbnails(
+        self,
+        output_dir: str | Path | None = None,
+        *,
+        interval_s: float = 15.0,
+        zip_output: bool = False,
+    ) -> list[Path] | Path:
+        """Generate PNG thumbnails at *interval_s* second intervals.
+        See :func:`mediatools.thumbnails.generate_thumbnails`."""
+        from mediatools.thumbnails import generate_thumbnails
+        return generate_thumbnails(
+            self.path, output_dir, interval_s=interval_s, zip_output=zip_output
+        )
 
     def __repr__(self) -> str:
         return f"MediaFile({self.path!r})"
