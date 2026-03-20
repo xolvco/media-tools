@@ -1,0 +1,73 @@
+"""MediaFile — primary interface for working with a media file."""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from mediatools.probe import ProbeResult, probe
+
+
+class MediaFile:
+    """Wraps a media file path and provides lazy-cached metadata and operations.
+
+    Usage::
+
+        mf = MediaFile("video.mp4")
+        print(mf.duration_ms)      # 183400
+        print(mf.has_video)        # True
+        print(mf.has_audio)        # True
+        mf.extract_audio("out.wav")
+    """
+
+    def __init__(self, path: str | Path) -> None:
+        self.path = Path(path)
+        if not self.path.exists():
+            raise FileNotFoundError(self.path)
+        self._probe: ProbeResult | None = None
+
+    # ------------------------------------------------------------------
+    # Metadata (lazy probe)
+    # ------------------------------------------------------------------
+
+    @property
+    def info(self) -> ProbeResult:
+        if self._probe is None:
+            self._probe = probe(self.path)
+        return self._probe
+
+    @property
+    def duration_ms(self) -> int:
+        return self.info.duration_ms
+
+    @property
+    def duration_s(self) -> float:
+        return self.info.duration_s
+
+    @property
+    def has_video(self) -> bool:
+        return self.info.has_video
+
+    @property
+    def has_audio(self) -> bool:
+        return self.info.has_audio
+
+    @property
+    def size_bytes(self) -> int:
+        return self.info.size_bytes
+
+    # ------------------------------------------------------------------
+    # Operations (delegate to audio.py / video.py as they are added)
+    # ------------------------------------------------------------------
+
+    def extract_audio(self, output: str | Path, **kwargs) -> Path:
+        """Extract the audio stream to *output*.  See :func:`mediatools.audio.extract_audio`."""
+        from mediatools.audio import extract_audio
+        return extract_audio(self.path, output, **kwargs)
+
+    def clip(self, output: str | Path, start_ms: int, end_ms: int, **kwargs) -> Path:
+        """Clip the file from *start_ms* to *end_ms*.  See :func:`mediatools.video.clip`."""
+        from mediatools.video import clip
+        return clip(self.path, output, start_ms=start_ms, end_ms=end_ms, **kwargs)
+
+    def __repr__(self) -> str:
+        return f"MediaFile({self.path!r})"
