@@ -79,5 +79,19 @@ class MediaFile:
         from mediatools.video import clip
         return clip(self.path, output, start_ms=start_ms, end_ms=end_ms, **kwargs)
 
+    def generate_thumbnails(
+        self,
+        output_dir: str | Path | None = None,
+        *,
+        interval_s: float = 15.0,
+        zip_output: bool = False,
+    ) -> list[Path] | Path:
+        """Generate PNG thumbnails at *interval_s* second intervals.
+        See :func:`mediatools.thumbnails.generate_thumbnails`."""
+        from mediatools.thumbnails import generate_thumbnails
+        return generate_thumbnails(
+            self.path, output_dir, interval_s=interval_s, zip_output=zip_output
+        )
+
     def __repr__(self) -> str:
         return f"MediaFile({self.path!r})"

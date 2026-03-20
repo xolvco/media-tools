@@ -105,6 +105,26 @@ def cmd_clip(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_thumbnails(args: argparse.Namespace) -> int:
+    from mediatools.thumbnails import generate_thumbnails, ThumbnailError
+    try:
+        result = generate_thumbnails(
+            args.input,
+            args.output_dir,
+            interval_s=args.interval,
+            zip_output=args.zip,
+        )
+    except (FileNotFoundError, ThumbnailError) as e:
+        _err(str(e), args.human)
+        return 1
+
+    if args.zip:
+        _out({"zip": str(result)}, args.human)
+    else:
+        _out({"count": len(result), "paths": [str(p) for p in result]}, args.human)
+    return 0
+
+
 def cmd_fetch_info(args: argparse.Namespace) -> int:
     from mediatools.download import fetch_info, DownloadError
     try:
@@ -212,6 +232,18 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--end-ms", type=int, required=True)
     _add_human(p)
     p.set_defaults(func=cmd_clip)
+
+    # thumbnails
+    p = sub.add_parser("thumbnails", help="Extract PNG thumbnails at regular intervals")
+    p.add_argument("input", type=Path)
+    p.add_argument("--output-dir", type=Path, default=None,
+                   help="Output folder (default: thumbnails/ next to input file)")
+    p.add_argument("--interval", type=float, default=15.0,
+                   help="Seconds between thumbnails (default: 15)")
+    p.add_argument("--zip", action="store_true",
+                   help="Zip all thumbnails on completion")
+    _add_human(p)
+    p.set_defaults(func=cmd_thumbnails)
 
     # fetch-info
     p = sub.add_parser("fetch-info", help="Fetch video metadata without downloading")
