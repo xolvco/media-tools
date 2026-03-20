@@ -9,6 +9,7 @@ from mediatools.video import (
     FrameInfo, VideoEntry,
     extract_frames, list_videos,
     write_manifest, read_manifest, concat_videos,
+    normalize_video, normalize_videos,
 )
 
 __all__ = [
@@ -18,5 +19,6 @@ __all__ = [
     "extract_frames", "FrameInfo",
     "list_videos", "VideoEntry",
     "write_manifest", "read_manifest", "concat_videos",
+    "normalize_video", "normalize_videos",
 ]
 __version__ = "0.1.0"

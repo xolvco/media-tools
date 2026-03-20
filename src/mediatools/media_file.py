@@ -124,5 +124,19 @@ class MediaFile:
             self.path, output_dir, interval_s=interval_s, zip_output=zip_output
         )
 
+    def normalize(
+        self,
+        output: str | Path,
+        *,
+        width: int = 1920,
+        height: int = 1080,
+        fps: float = 30.0,
+        **kwargs,
+    ) -> Path:
+        """Normalize to consistent resolution, FPS, and format.
+        See :func:`mediatools.video.normalize_video`."""
+        from mediatools.video import normalize_video
+        return normalize_video(self.path, output, width=width, height=height, fps=fps, **kwargs)
+
     def __repr__(self) -> str:
         return f"MediaFile({self.path!r})"

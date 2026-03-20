@@ -29,21 +29,7 @@ mediatools repair clip.mp4 clip_fixed.mp4
 
 ---
 
-### Video normalization
-
-Normalize resolution, aspect ratio, FPS, and pixel format across multiple source
-clips before concatenation. Uses letterbox/pad to avoid distortion.
-
-```python
-from mediatools.video import normalize_video
-
-normalize_video("clip.mp4", "clip_norm.mp4", width=1920, height=1080, fps=30)
-```
-
-CLI:
-```bash
-mediatools normalize clip.mp4 --width 1920 --height 1080 --fps 30
-```
+### ~~Video normalization~~ ✅ shipped
 
 ---
 

@@ -9,8 +9,8 @@ Status: manual — updated at the end of each feature
 
 | Stage | What shipped |
 | --- | --- |
-| Python library | `probe`, `extract_audio`, `clip`, `pull_video`, `convert_audio`, `generate_thumbnails`, `generate_thumbnails_at`, `extract_frames`, `MediaFile` |
-| Tests | 71 tests, all mocked (no real media files needed) |
+| Python library | `probe`, `extract_audio`, `clip`, `pull_video`, `convert_audio`, `generate_thumbnails`, `generate_thumbnails_at`, `extract_frames`, `list_videos`, `write_manifest`, `read_manifest`, `concat_videos`, `normalize_video`, `normalize_videos`, `MediaFile` |
+| Tests | 114 tests, all mocked (no real media files needed) |
 | CLI | All commands, JSON default output, `--human` flag |
 | Shell scripts | `pull_video.sh` (bash), `pull_video.ps1` (PowerShell) — JSON-parsing, chainable |
 | User docs | MkDocs site — getting started, guide, authentication, scripts, workflows, reference |
@@ -142,9 +142,11 @@ user runs it inside Resolve.
 name, description, input params with types, output schema. This is what an LLM
 agent uses to call the tool. The JSON default output is already step 1.
 **To do:**
+
 1. Add `mediatools tools` CLI command — prints all tool definitions as JSON
 2. Add `src/mediatools/tools.py` — tool schema registry
 3. Wire into an agent harness (Claude API tool use)
+
 **Connection:** same pattern as FunscriptForge agentic CLI gap.
 
 ---

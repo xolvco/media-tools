@@ -105,6 +105,38 @@ def cmd_clip(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_normalize(args: argparse.Namespace) -> int:
+    from mediatools.video import normalize_video, normalize_videos, VideoError
+    from pathlib import Path as _Path
+
+    inputs = args.inputs
+    try:
+        if len(inputs) == 1:
+            output = args.output or _Path(inputs[0]).with_stem(
+                _Path(inputs[0]).stem + ".norm"
+            )
+            out = normalize_video(
+                inputs[0], output,
+                width=args.width, height=args.height,
+                fps=args.fps, crf=args.crf, preset=args.preset,
+            )
+            _out({"path": str(out), "width": args.width, "height": args.height,
+                  "fps": args.fps}, args.human)
+        else:
+            output_dir = args.output or _Path(inputs[0]).parent / "normalized"
+            outs = normalize_videos(
+                inputs, output_dir,
+                width=args.width, height=args.height,
+                fps=args.fps, crf=args.crf, preset=args.preset,
+            )
+            _out({"count": len(outs), "output_dir": str(output_dir),
+                  "paths": [str(p) for p in outs]}, args.human)
+    except (FileNotFoundError, VideoError) as e:
+        _err(str(e), args.human)
+        return 1
+    return 0
+
+
 def cmd_list_videos(args: argparse.Namespace) -> int:
     from mediatools.video import list_videos, VideoError
     try:
@@ -349,6 +381,25 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--end-ms", type=int, required=True)
     _add_human(p)
     p.set_defaults(func=cmd_clip)
+
+    # normalize
+    p = sub.add_parser("normalize",
+                       help="Re-encode to consistent resolution, FPS, and format")
+    p.add_argument("inputs", type=Path, nargs="+",
+                   help="One or more video files to normalize")
+    p.add_argument("--output", "-o", type=Path, default=None,
+                   help="Output file (single input) or output folder (multiple inputs)")
+    p.add_argument("--width", type=int, default=1920)
+    p.add_argument("--height", type=int, default=1080)
+    p.add_argument("--fps", type=float, default=30.0)
+    p.add_argument("--crf", type=int, default=18,
+                   help="H.264 CRF quality (18=visually lossless, higher=smaller)")
+    p.add_argument("--preset", default="fast",
+                   choices=["ultrafast", "superfast", "veryfast", "faster",
+                             "fast", "medium", "slow", "veryslow"],
+                   help="ffmpeg encoding preset (default: fast)")
+    _add_human(p)
+    p.set_defaults(func=cmd_normalize)
 
     # list-videos
     p = sub.add_parser("list-videos", help="List video files in a directory with metadata")

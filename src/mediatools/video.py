@@ -491,3 +491,155 @@ def concat_videos(
         filelist.unlink(missing_ok=True)
 
     return output
+
+
+# ---------------------------------------------------------------------------
+# Normalization
+# ---------------------------------------------------------------------------
+
+def normalize_video(
+    input: str | Path,
+    output: str | Path,
+    *,
+    width: int = 1920,
+    height: int = 1080,
+    fps: float = 30.0,
+    pixel_fmt: str = "yuv420p",
+    audio_sample_rate: int = 44100,
+    audio_channels: int = 2,
+    crf: int = 18,
+    preset: str = "fast",
+    timeout: float = 600.0,
+) -> Path:
+    """Re-encode *input* to a consistent resolution, frame rate, and format.
+
+    All sources in an assembly reel should be normalized before concatenation
+    to guarantee identical codec, resolution, FPS, and pixel format.  This
+    avoids re-encode artifacts and prevents ffmpeg concat demuxer errors.
+
+    Scaling uses letterbox (pad with black) to preserve the original aspect
+    ratio.  A 4:3 clip going into a 16:9 output gets black bars on the sides;
+    a vertical clip gets bars on top and bottom.
+
+    Args:
+        input:             Source video file.
+        output:            Destination path.
+        width:             Target width in pixels (default 1920).
+        height:            Target height in pixels (default 1080).
+        fps:               Target frame rate (default 30.0).
+        pixel_fmt:         Pixel format (default ``yuv420p`` — required for
+                           H.264 compatibility and xfade transitions).
+        audio_sample_rate: Output audio sample rate in Hz (default 44100).
+        audio_channels:    Output audio channels (default 2).
+        crf:               H.264 constant rate factor — 18 = visually lossless,
+                           higher = smaller file (default 18).
+        preset:            ffmpeg encoding preset — ``"fast"`` balances speed
+                           and compression (default ``"fast"``).
+        timeout:           ffmpeg timeout in seconds (default 600).
+
+    Returns:
+        Path to the normalized output file.
+
+    Raises:
+        FileNotFoundError: if *input* does not exist.
+        VideoError: if ffmpeg is not on PATH or returns an error.
+    """
+    input = Path(input)
+    output = Path(output)
+
+    if not input.exists():
+        raise FileNotFoundError(input)
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    # Build video filter chain:
+    #   1. scale to fit within target box, preserving aspect ratio
+    #   2. pad to exact target dimensions (letterbox / pillarbox)
+    #   3. set frame rate
+    #   4. set pixel format
+    vf = (
+        f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
+        f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:black,"
+        f"fps={fps},"
+        f"format={pixel_fmt}"
+    )
+
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", str(input),
+        "-vf", vf,
+        "-c:v", "libx264",
+        "-preset", preset,
+        "-crf", str(crf),
+        "-c:a", "aac",
+        "-b:a", "192k",
+        "-ar", str(audio_sample_rate),
+        "-ac", str(audio_channels),
+        str(output),
+    ]
+
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout
+        )
+    except FileNotFoundError:
+        raise VideoError("ffmpeg not found — install ffmpeg and ensure it is on PATH")
+    except subprocess.TimeoutExpired:
+        raise VideoError(f"ffmpeg timed out after {timeout}s")
+
+    if result.returncode != 0:
+        raise VideoError(f"ffmpeg error: {result.stderr[-500:]}")
+
+    return output
+
+
+def normalize_videos(
+    inputs: list[str | Path],
+    output_dir: str | Path,
+    *,
+    suffix: str = ".norm",
+    width: int = 1920,
+    height: int = 1080,
+    fps: float = 30.0,
+    pixel_fmt: str = "yuv420p",
+    audio_sample_rate: int = 44100,
+    audio_channels: int = 2,
+    crf: int = 18,
+    preset: str = "fast",
+    timeout: float = 600.0,
+) -> list[Path]:
+    """Normalize a list of video files to consistent settings.
+
+    Each output is written to *output_dir* with *suffix* inserted before the
+    extension (e.g. ``clip.mp4`` → ``clip.norm.mp4``).  The returned list
+    preserves the input order and can be passed directly to
+    :func:`concat_videos`.
+
+    Args:
+        inputs:     Source video files.
+        output_dir: Folder to write normalized files.
+        suffix:     Stem suffix for output filenames (default ``".norm"``).
+        **kwargs:   Forwarded to :func:`normalize_video`.
+
+    Returns:
+        List of normalized output paths in input order.
+    """
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    kwargs = dict(
+        width=width, height=height, fps=fps,
+        pixel_fmt=pixel_fmt,
+        audio_sample_rate=audio_sample_rate,
+        audio_channels=audio_channels,
+        crf=crf, preset=preset, timeout=timeout,
+    )
+
+    outputs: list[Path] = []
+    for src in inputs:
+        src = Path(src)
+        dest = output_dir / f"{src.stem}{suffix}{src.suffix}"
+        normalize_video(src, dest, **kwargs)
+        outputs.append(dest)
+
+    return outputs
