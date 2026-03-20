@@ -73,6 +73,55 @@ Returns `{output, duration_ms, segment_count, markers: [{label, start_ms}]}`.
 
 ---
 
+### Pause-freeze cross-fade transition
+
+A polished transition between concatenated clips:
+
+1. **Find the last meaningful frame** of the outgoing clip — skip trailing black using ffmpeg `blackdetect`.
+2. **Freeze that frame** for the first half of the transition duration.
+3. **Cross-fade (dissolve)** the frozen outgoing frame into the frozen first meaningful frame of the incoming clip.
+4. **Audio option** — during the transition, optionally begin playing audio from the incoming clip so the viewer hears the next scene start while the visual dissolve is still happening. When the dissolve completes, audio continues from the natural start of the incoming clip.
+
+```python
+from mediatools.video import concat_videos
+
+concat_videos(
+    ["clip1.mp4", "clip2.mp4", "clip3.mp4"],
+    "reel.mp4",
+    transition="pause_fade",   # vs "cut" (default) or "black" (gap fill)
+    transition_s=2.0,          # total duration of the cross-fade
+    transition_audio="next",   # "none" | "next" (incoming audio during transition)
+                               # | "prev" (outgoing audio fades out)
+)
+```
+
+CLI:
+```bash
+mediatools concat manifest.json \
+  --transition pause_fade --transition-s 2 --transition-audio next
+```
+
+**ffmpeg implementation notes:**
+
+- Last non-black frame: `ffprobe` + `blackdetect` filter to find the last white frame timestamp, then extract with `-ss`
+- Freeze frame: `loop=loop=-1:size=1:start=N` filter or `tpad=stop_mode=clone:stop_duration=X`
+- Cross-dissolve: `xfade=transition=fade:duration=D:offset=O` filter
+- Audio from next clip during transition: `acrossfade` or `amix` with timed offsets; requires splitting audio from video, mixing the tail of clip N with the head of clip N+1, then reattaching
+
+**Manifest extension** — each clip entry can override transition settings:
+
+```json
+{
+  "clips": [
+    {"path": "clip1.mp4"},
+    {"path": "clip2.mp4", "transition": "pause_fade", "transition_s": 3.0},
+    {"path": "clip3.mp4", "transition": "cut"}
+  ]
+}
+```
+
+---
+
 ### Title cards
 
 Prepend a formatted title clip to each source segment before concatenation.
