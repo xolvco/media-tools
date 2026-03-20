@@ -230,6 +230,28 @@ Add `fps`, `bit_rate` to `StreamInfo` and probe output.
 
 ## Future / exploratory
 
+### Energy histogram — shared analysis primitive
+
+A `compute_energy(frames)` function returning a 1D numpy array of signal strength
+is the shared primitive behind scene selection, smart crop, thumbnail selection,
+and funscript intensity mapping.  Build once in `mediatools.analysis` (or the
+video-workflow library), use everywhere.
+
+```python
+from mediatools.analysis import compute_temporal_energy, compute_spatial_energy
+
+# Temporal: frame-to-frame diff → when is something happening?
+scores = compute_temporal_energy(frames)   # shape: (n_frames,)
+
+# Spatial: gradient energy per row → where in the frame is the content?
+row_scores = compute_spatial_energy(frames)  # shape: (height,)
+```
+
+Callers interpret the axis — the math is the same.
+Requires numpy; OpenCV optional for optical flow (richer signal, slower).
+
+---
+
 ### "Interesting parts" detection (forgegen integration)
 
 Given a set of source videos, find high-motion or high-energy windows automatically.
