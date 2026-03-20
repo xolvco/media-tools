@@ -1,9 +1,11 @@
-"""Video clipping and frame extraction functions."""
+"""Video clipping, frame extraction, listing, and concatenation functions."""
 
 from __future__ import annotations
 
 import dataclasses
+import json
 import subprocess
+import tempfile
 from pathlib import Path
 
 
@@ -202,3 +204,290 @@ def extract_frames(
         frames.append(FrameInfo(path=frame_path, index=idx, timestamp_ms=ts_ms))
 
     return frames
+
+
+# ---------------------------------------------------------------------------
+# Directory listing
+# ---------------------------------------------------------------------------
+
+VIDEO_EXTENSIONS = frozenset({
+    ".mp4", ".mkv", ".mov", ".avi", ".wmv", ".flv", ".webm",
+    ".m4v", ".ts", ".mts", ".m2ts", ".3gp",
+})
+
+
+@dataclasses.dataclass
+class VideoEntry:
+    """Metadata for a single video file in a directory listing."""
+    path: Path
+    duration_ms: int
+    size_bytes: int
+    width: int | None
+    height: int | None
+    fps: float | None
+    codec: str | None
+
+
+def list_videos(
+    directory: str | Path,
+    *,
+    recursive: bool = False,
+    extensions: set[str] | None = None,
+    sort_by: str = "name",  # "name" | "mtime" | "size" | "duration"
+) -> list[VideoEntry]:
+    """Scan *directory* for video files and return their metadata.
+
+    Args:
+        directory:  Folder to scan.
+        recursive:  If ``True``, descend into subdirectories.
+        extensions: Set of lowercase extensions to include (with dot).
+                    Defaults to :data:`VIDEO_EXTENSIONS`.
+        sort_by:    Primary sort key — ``"name"`` (alphabetical),
+                    ``"mtime"`` (newest last), ``"size"``, or ``"duration"``.
+
+    Returns:
+        List of :class:`VideoEntry` objects, each probed for metadata.
+        Files that cannot be probed are skipped with a warning to stderr.
+
+    Raises:
+        FileNotFoundError: if *directory* does not exist.
+        NotADirectoryError: if *directory* is not a directory.
+    """
+    import sys
+
+    directory = Path(directory)
+    if not directory.exists():
+        raise FileNotFoundError(directory)
+    if not directory.is_dir():
+        raise NotADirectoryError(directory)
+
+    exts = extensions if extensions is not None else VIDEO_EXTENSIONS
+    glob_fn = directory.rglob if recursive else directory.glob
+
+    paths = sorted(
+        p for p in glob_fn("*")
+        if p.is_file() and p.suffix.lower() in exts
+    )
+
+    from mediatools.probe import probe, ProbeError
+
+    entries: list[VideoEntry] = []
+    for p in paths:
+        try:
+            info = probe(p)
+        except ProbeError as e:
+            print(f"warning: skipping {p.name} — {e}", file=sys.stderr)
+            continue
+        vs = info.video_stream
+        entries.append(VideoEntry(
+            path=p,
+            duration_ms=info.duration_ms,
+            size_bytes=info.size_bytes,
+            width=vs.width if vs else None,
+            height=vs.height if vs else None,
+            fps=vs.fps if vs else None,
+            codec=vs.codec_name if vs else None,
+        ))
+
+    key_fns = {
+        "name": lambda e: e.path.name.lower(),
+        "mtime": lambda e: e.path.stat().st_mtime,
+        "size": lambda e: e.size_bytes,
+        "duration": lambda e: e.duration_ms,
+    }
+    if sort_by not in key_fns:
+        raise ValueError(f"sort_by must be one of {list(key_fns)}, got {sort_by!r}")
+
+    entries.sort(key=key_fns[sort_by])
+    return entries
+
+
+# ---------------------------------------------------------------------------
+# Manifest: human-editable clip order file
+# ---------------------------------------------------------------------------
+
+def write_manifest(
+    entries: list[VideoEntry] | list[Path],
+    manifest_path: str | Path,
+    *,
+    output_video: str | Path | None = None,
+) -> Path:
+    """Write a manifest JSON that a human can reorder before concatenation.
+
+    The manifest lists clips in the current order.  Edit the ``"clips"`` array
+    to change the order, remove clips, or add a ``"label"`` to each entry.
+    Then pass the manifest to :func:`concat_videos`.
+
+    Args:
+        entries:       List of :class:`VideoEntry` objects (from :func:`list_videos`)
+                       or plain :class:`Path` objects.
+        manifest_path: Where to write the ``.json`` file.
+        output_video:  Suggested output path written into the manifest
+                       (default: ``reel.mp4`` next to the manifest).
+
+    Returns:
+        Path to the written manifest file.
+    """
+    manifest_path = Path(manifest_path)
+    if output_video is None:
+        output_video = manifest_path.with_name("reel.mp4")
+
+    clips = []
+    for e in entries:
+        p = e.path if isinstance(e, VideoEntry) else Path(e)
+        entry: dict = {"path": str(p)}
+        if isinstance(e, VideoEntry):
+            entry["duration_ms"] = e.duration_ms
+            if e.width and e.height:
+                entry["resolution"] = f"{e.width}x{e.height}"
+        clips.append(entry)
+
+    manifest = {
+        "output": str(output_video),
+        "clips": clips,
+    }
+    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    return manifest_path
+
+
+def read_manifest(manifest_path: str | Path) -> tuple[list[Path], Path]:
+    """Read a manifest and return ``(ordered_clip_paths, output_path)``.
+
+    Args:
+        manifest_path: Path to a manifest JSON written by :func:`write_manifest`
+                       or created manually.
+
+    Returns:
+        Tuple of ``(list[Path], output_path)``.
+
+    Raises:
+        FileNotFoundError: if the manifest file does not exist.
+        ValueError: if the manifest is malformed or any clip path is missing.
+    """
+    manifest_path = Path(manifest_path)
+    if not manifest_path.exists():
+        raise FileNotFoundError(manifest_path)
+
+    data = json.loads(manifest_path.read_text(encoding="utf-8"))
+    if "clips" not in data:
+        raise ValueError(f"manifest {manifest_path} is missing 'clips' key")
+
+    output = Path(data.get("output", manifest_path.with_name("reel.mp4")))
+    clips: list[Path] = []
+    for item in data["clips"]:
+        if isinstance(item, str):
+            p = Path(item)
+        elif isinstance(item, dict):
+            if "path" not in item:
+                raise ValueError(f"clip entry missing 'path': {item}")
+            p = Path(item["path"])
+        else:
+            raise ValueError(f"unexpected clip entry type: {item!r}")
+        clips.append(p)
+
+    return clips, output
+
+
+# ---------------------------------------------------------------------------
+# Concatenation
+# ---------------------------------------------------------------------------
+
+def concat_videos(
+    inputs: list[str | Path] | str | Path,
+    output: str | Path | None = None,
+    *,
+    re_encode: bool = False,
+    timeout: float = 3600.0,
+) -> Path:
+    """Concatenate multiple video files into a single output.
+
+    Uses the ffmpeg concat demuxer for speed.  With ``re_encode=False``
+    (default) all inputs **must share the same codec, resolution, and frame
+    rate** — ffmpeg will fail loudly if they do not.  Set ``re_encode=True``
+    to force a re-encode to H.264/AAC, which works with heterogeneous sources
+    at the cost of extra processing time.
+
+    Accepts a list of file paths **or** a path to a manifest JSON produced by
+    :func:`write_manifest`.
+
+    Args:
+        inputs:     List of video paths, or path to a ``manifest.json``.
+        output:     Destination file.  Required when *inputs* is a list.
+                    When *inputs* is a manifest the output defaults to the
+                    value stored in the manifest.
+        re_encode:  Force H.264 (libx264) + AAC re-encode.  Slower but
+                    handles mixed sources.
+        timeout:    ffmpeg timeout in seconds.
+
+    Returns:
+        Path to the concatenated output file.
+
+    Raises:
+        FileNotFoundError: if any input file is missing.
+        ValueError: if fewer than 2 inputs are provided.
+        VideoError: if ffmpeg is not on PATH or returns an error.
+    """
+    # Resolve inputs — manifest or list
+    if isinstance(inputs, (str, Path)) and Path(inputs).suffix.lower() == ".json":
+        clips, manifest_output = read_manifest(inputs)
+        if output is None:
+            output = manifest_output
+    else:
+        if isinstance(inputs, (str, Path)):
+            inputs = [inputs]
+        clips = [Path(p) for p in inputs]
+
+    if output is None:
+        raise ValueError("output path is required when inputs is a list (not a manifest)")
+
+    if len(clips) < 2:
+        raise ValueError(f"concat requires at least 2 inputs, got {len(clips)}")
+
+    for p in clips:
+        if not Path(p).exists():
+            raise FileNotFoundError(p)
+
+    output = Path(output)
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    # Write a temporary ffmpeg concat file list
+    with tempfile.NamedTemporaryFile(
+        mode="w", suffix=".txt", delete=False, encoding="utf-8"
+    ) as fh:
+        for p in clips:
+            # ffmpeg concat demuxer requires forward slashes and escaped apostrophes
+            safe = str(Path(p).resolve()).replace("'", r"'\''")
+            fh.write(f"file '{safe}'\n")
+        filelist = Path(fh.name)
+
+    try:
+        cmd = ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(filelist)]
+        if re_encode:
+            cmd += ["-c:v", "libx264", "-preset", "fast", "-crf", "18",
+                    "-c:a", "aac", "-b:a", "192k"]
+        else:
+            cmd += ["-c", "copy"]
+        cmd.append(str(output))
+
+        try:
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=timeout
+            )
+        except FileNotFoundError:
+            raise VideoError("ffmpeg not found — install ffmpeg and ensure it is on PATH")
+        except subprocess.TimeoutExpired:
+            raise VideoError(f"ffmpeg timed out after {timeout}s")
+
+        if result.returncode != 0:
+            msg = result.stderr[-800:]
+            if not re_encode and "Invalid data" in msg:
+                msg += (
+                    "\n\nHint: sources may have different codecs or resolutions. "
+                    "Try concat_videos(..., re_encode=True)."
+                )
+            raise VideoError(f"ffmpeg error: {msg}")
+
+    finally:
+        filelist.unlink(missing_ok=True)
+
+    return output

@@ -81,7 +81,7 @@ class MediaFile:
 
     def extract_frames(
         self,
-        output_dir: str | "Path | None" = None,
+        output_dir: str | Path | None = None,
         *,
         fps: float | None = None,
         start_ms: int | None = None,

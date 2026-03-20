@@ -105,6 +105,76 @@ def cmd_clip(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_list_videos(args: argparse.Namespace) -> int:
+    from mediatools.video import list_videos, VideoError
+    try:
+        entries = list_videos(args.directory, recursive=args.recursive, sort_by=args.sort_by)
+    except (FileNotFoundError, NotADirectoryError, ValueError, VideoError) as e:
+        _err(str(e), args.human)
+        return 1
+
+    clips = [
+        {
+            "path": str(e.path),
+            "duration_ms": e.duration_ms,
+            "size_bytes": e.size_bytes,
+            "resolution": f"{e.width}x{e.height}" if e.width and e.height else None,
+            "fps": e.fps,
+            "codec": e.codec,
+        }
+        for e in entries
+    ]
+    _out({"count": len(clips), "directory": str(args.directory), "clips": clips}, args.human)
+    return 0
+
+
+def cmd_init_manifest(args: argparse.Namespace) -> int:
+    from mediatools.video import list_videos, write_manifest, VideoError
+    try:
+        entries = list_videos(args.directory, recursive=args.recursive, sort_by=args.sort_by)
+    except (FileNotFoundError, NotADirectoryError, ValueError, VideoError) as e:
+        _err(str(e), args.human)
+        return 1
+
+    if not entries:
+        _err(f"no video files found in {args.directory}", args.human)
+        return 1
+
+    manifest_path = args.manifest or (Path(args.directory) / "manifest.json")
+    output_video = args.output or (Path(args.directory) / "reel.mp4")
+    try:
+        written = write_manifest(entries, manifest_path, output_video=output_video)
+    except Exception as e:
+        _err(str(e), args.human)
+        return 1
+
+    _out({"manifest": str(written), "count": len(entries)}, args.human)
+    return 0
+
+
+def cmd_concat(args: argparse.Namespace) -> int:
+    from mediatools.video import concat_videos, VideoError
+    # Accept either: multiple file paths, or a single manifest.json
+    if len(args.inputs) == 1 and args.inputs[0].suffix.lower() == ".json":
+        inputs = args.inputs[0]   # manifest path
+        output = args.output      # may be None — manifest supplies it
+    else:
+        inputs = args.inputs
+        if args.output is None:
+            _err("--output is required when passing file paths directly", args.human)
+            return 1
+        output = args.output
+
+    try:
+        out = concat_videos(inputs, output, re_encode=args.re_encode)
+    except (FileNotFoundError, ValueError, VideoError) as e:
+        _err(str(e), args.human)
+        return 1
+
+    _out({"path": str(out)}, args.human)
+    return 0
+
+
 def cmd_extract_frames(args: argparse.Namespace) -> int:
     from mediatools.video import extract_frames, VideoError
     try:
@@ -279,6 +349,43 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--end-ms", type=int, required=True)
     _add_human(p)
     p.set_defaults(func=cmd_clip)
+
+    # list-videos
+    p = sub.add_parser("list-videos", help="List video files in a directory with metadata")
+    p.add_argument("directory", type=Path)
+    p.add_argument("--recursive", "-r", action="store_true",
+                   help="Descend into subdirectories")
+    p.add_argument("--sort-by", default="name",
+                   choices=["name", "mtime", "size", "duration"],
+                   help="Sort order (default: name)")
+    _add_human(p)
+    p.set_defaults(func=cmd_list_videos)
+
+    # init-manifest
+    p = sub.add_parser("init-manifest",
+                       help="Scan a directory and write a manifest.json for manual reordering")
+    p.add_argument("directory", type=Path)
+    p.add_argument("--manifest", type=Path, default=None,
+                   help="Manifest output path (default: <directory>/manifest.json)")
+    p.add_argument("--output", type=Path, default=None,
+                   help="Output video path stored in manifest (default: <directory>/reel.mp4)")
+    p.add_argument("--recursive", "-r", action="store_true")
+    p.add_argument("--sort-by", default="name",
+                   choices=["name", "mtime", "size", "duration"])
+    _add_human(p)
+    p.set_defaults(func=cmd_init_manifest)
+
+    # concat
+    p = sub.add_parser("concat",
+                       help="Concatenate videos in order — accepts file list or manifest.json")
+    p.add_argument("inputs", type=Path, nargs="+",
+                   help="Video files to concatenate, or a single manifest.json")
+    p.add_argument("--output", "-o", type=Path, default=None,
+                   help="Output file (required for file list; manifest supplies default)")
+    p.add_argument("--re-encode", action="store_true",
+                   help="Re-encode to H.264/AAC (required for mixed-format sources)")
+    _add_human(p)
+    p.set_defaults(func=cmd_concat)
 
     # extract-frames
     p = sub.add_parser("extract-frames",
