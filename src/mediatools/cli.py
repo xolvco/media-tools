@@ -62,6 +62,8 @@ def cmd_pull_video(args: argparse.Namespace) -> int:
             output_dir=dest,
             filename=args.filename,
             quality=args.quality,
+            cookies=args.cookies,
+            cookies_from_browser=args.cookies_from_browser,
         )
         print(f"saved {out}")
         return 0
@@ -107,6 +109,11 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Output filename without extension (default: video title)")
     p.add_argument("--quality", default="bestvideo+bestaudio/best",
                    help="yt-dlp format selector (default: best)")
+    p.add_argument("--cookies", type=Path, default=None,
+                   help="Path to Netscape-format cookies.txt file")
+    p.add_argument("--cookies-from-browser", default=None,
+                   metavar="BROWSER",
+                   help="Extract cookies from browser: chrome, firefox, edge, safari")
     p.set_defaults(func=cmd_pull_video)
 
     return parser

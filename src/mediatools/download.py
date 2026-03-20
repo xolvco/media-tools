@@ -72,6 +72,8 @@ def pull_video(
     filename: str | None = None,
     quality: str = "bestvideo+bestaudio/best",
     timeout: float = 300.0,
+    cookies: str | Path | None = None,
+    cookies_from_browser: str | None = None,
 ) -> Path:
     """Download a video from *url* to *output_dir*.
 
@@ -79,11 +81,14 @@ def pull_video(
     hundreds of other sites.  Install with: ``pip install yt-dlp``
 
     Args:
-        url:        Video URL.
-        output_dir: Destination folder.  Defaults to the platform Downloads folder.
-        filename:   Output filename without extension.  Defaults to the video title.
-        quality:    yt-dlp format selector.  Default: best available quality.
-        timeout:    Socket timeout in seconds.
+        url:                  Video URL.
+        output_dir:           Destination folder.  Defaults to the platform Downloads folder.
+        filename:             Output filename without extension.  Defaults to the video title.
+        quality:              yt-dlp format selector.  Default: best available quality.
+        timeout:              Socket timeout in seconds.
+        cookies:              Path to a Netscape-format cookies.txt file.
+        cookies_from_browser: Browser name to extract cookies from automatically
+                              (e.g. "chrome", "firefox", "edge", "safari").
 
     Returns:
         Path to the downloaded file.
@@ -112,6 +117,11 @@ def pull_video(
         "no_warnings": True,
         "noprogress": True,
     }
+
+    if cookies:
+        ydl_opts["cookiefile"] = str(cookies)
+    if cookies_from_browser:
+        ydl_opts["cookiesfrombrowser"] = (cookies_from_browser,)
 
     downloaded: list[tuple[Path, dict]] = []  # (path, info_dict)
 
