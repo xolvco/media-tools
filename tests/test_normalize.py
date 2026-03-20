@@ -89,11 +89,35 @@ class TestNormalizeVideo(unittest.TestCase):
         vf = cmd[cmd.index("-vf") + 1]
         self.assertIn("format=yuv420p", vf)
 
+    def test_invalid_fit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            src = Path(tmp) / "clip.mp4"
+            src.touch()
+            with self.assertRaises(ValueError) as ctx:
+                normalize_video(src, Path(tmp) / "out.mp4", fit="zoom")
+            self.assertIn("fit", str(ctx.exception))
+
     def test_letterbox_preserves_aspect(self):
-        """force_original_aspect_ratio=decrease must be in the scale filter."""
-        cmd = self._capture_cmd()
+        """force_original_aspect_ratio=decrease and pad must appear."""
+        cmd = self._capture_cmd(fit="letterbox")
         vf = cmd[cmd.index("-vf") + 1]
         self.assertIn("force_original_aspect_ratio=decrease", vf)
+        self.assertIn("pad=", vf)
+
+    def test_crop_uses_increase_and_crop(self):
+        cmd = self._capture_cmd(fit="crop")
+        vf = cmd[cmd.index("-vf") + 1]
+        self.assertIn("force_original_aspect_ratio=increase", vf)
+        self.assertIn("crop=1920:1080", vf)
+        self.assertNotIn("pad=", vf)
+
+    def test_stretch_no_aspect_flags(self):
+        cmd = self._capture_cmd(fit="stretch")
+        vf = cmd[cmd.index("-vf") + 1]
+        self.assertNotIn("force_original_aspect_ratio", vf)
+        self.assertNotIn("pad=", vf)
+        self.assertNotIn("crop=", vf)
+        self.assertIn("scale=1920:1080", vf)
 
     def test_libx264_codec(self):
         cmd = self._capture_cmd()

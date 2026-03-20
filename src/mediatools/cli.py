@@ -118,16 +118,16 @@ def cmd_normalize(args: argparse.Namespace) -> int:
             out = normalize_video(
                 inputs[0], output,
                 width=args.width, height=args.height,
-                fps=args.fps, crf=args.crf, preset=args.preset,
+                fps=args.fps, fit=args.fit, crf=args.crf, preset=args.preset,
             )
             _out({"path": str(out), "width": args.width, "height": args.height,
-                  "fps": args.fps}, args.human)
+                  "fps": args.fps, "fit": args.fit}, args.human)
         else:
             output_dir = args.output or _Path(inputs[0]).parent / "normalized"
             outs = normalize_videos(
                 inputs, output_dir,
                 width=args.width, height=args.height,
-                fps=args.fps, crf=args.crf, preset=args.preset,
+                fps=args.fps, fit=args.fit, crf=args.crf, preset=args.preset,
             )
             _out({"count": len(outs), "output_dir": str(output_dir),
                   "paths": [str(p) for p in outs]}, args.human)
@@ -392,6 +392,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--width", type=int, default=1920)
     p.add_argument("--height", type=int, default=1080)
     p.add_argument("--fps", type=float, default=30.0)
+    p.add_argument("--fit", default="letterbox",
+                   choices=["letterbox", "crop", "stretch"],
+                   help="Scaling mode: letterbox (default), crop, or stretch")
     p.add_argument("--crf", type=int, default=18,
                    help="H.264 CRF quality (18=visually lossless, higher=smaller)")
     p.add_argument("--preset", default="fast",

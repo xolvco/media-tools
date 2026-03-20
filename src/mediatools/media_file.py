@@ -131,12 +131,14 @@ class MediaFile:
         width: int = 1920,
         height: int = 1080,
         fps: float = 30.0,
+        fit: str = "letterbox",
         **kwargs,
     ) -> Path:
         """Normalize to consistent resolution, FPS, and format.
         See :func:`mediatools.video.normalize_video`."""
         from mediatools.video import normalize_video
-        return normalize_video(self.path, output, width=width, height=height, fps=fps, **kwargs)
+        return normalize_video(self.path, output, width=width, height=height,
+                               fps=fps, fit=fit, **kwargs)
 
     def __repr__(self) -> str:
         return f"MediaFile({self.path!r})"
