@@ -663,3 +663,113 @@ def normalize_videos(
         outputs.append(dest)
 
     return outputs
+
+
+def speed_change(
+    input: str | Path,
+    output: str | Path,
+    speed: float,
+    *,
+    audio: bool = True,
+    crf: int = 18,
+    preset: str = "fast",
+    timeout: float = 600.0,
+) -> Path:
+    """Re-encode *input* at *speed* times normal playback rate.
+
+    ``speed > 1.0`` compresses time (fast-forward).
+    ``speed < 1.0`` stretches time (slow-motion).
+
+    Video is re-encoded using ``setpts``. Audio is re-sampled using
+    ``atempo`` (chained for factors outside 0.5–2.0). Pass ``audio=False``
+    to drop the audio track, which avoids ``atempo`` limitations and is
+    slightly faster to encode.
+
+    Args:
+        input:   Source video file.
+        output:  Destination path — format inferred from extension.
+        speed:   Playback speed multiplier. Must be > 0.
+                 Examples: ``2.0`` = 2× fast-forward, ``0.5`` = half-speed.
+        audio:   If ``True`` (default), re-sample audio to match the new speed.
+                 If ``False``, drop the audio track.
+        crf:     H.264/H.265 quality factor (lower = better, default 18).
+        preset:  ffmpeg encoding preset (default ``"fast"``).
+        timeout: ffmpeg timeout in seconds (default 600).
+
+    Returns:
+        Path to the output file.
+
+    Raises:
+        FileNotFoundError: If *input* does not exist.
+        ValueError: If *speed* is not positive.
+        VideoError: If ffmpeg is not on PATH or returns an error.
+    """
+    input = Path(input)
+    output = Path(output)
+
+    if not input.exists():
+        raise FileNotFoundError(input)
+    if speed <= 0:
+        raise ValueError(f"speed must be positive, got {speed}")
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+
+    # setpts: PTS / speed  →  1/speed * PTS  (inverse because PTS is per-frame time)
+    video_filter = f"setpts={1.0 / speed}*PTS"
+
+    if audio:
+        # atempo only accepts values in [0.5, 2.0]; chain for factors outside that range
+        audio_filters = _build_atempo_chain(speed)
+        filter_args = [
+            "-filter:v", video_filter,
+            "-filter:a", ",".join(audio_filters),
+        ]
+    else:
+        filter_args = ["-filter:v", video_filter, "-an"]
+
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", str(input),
+        *filter_args,
+        "-c:v", "libx264",
+        "-crf", str(crf),
+        "-preset", preset,
+        str(output),
+    ]
+
+    try:
+        result = subprocess.run(
+            cmd, capture_output=True, text=True, timeout=timeout
+        )
+    except FileNotFoundError:
+        raise VideoError("ffmpeg not found — install ffmpeg and ensure it is on PATH")
+    except subprocess.TimeoutExpired:
+        raise VideoError(f"ffmpeg timed out after {timeout}s")
+
+    if result.returncode != 0:
+        raise VideoError(f"ffmpeg error: {result.stderr[-500:]}")
+
+    return output
+
+
+def _build_atempo_chain(speed: float) -> list[str]:
+    """Return a list of atempo filter values that together achieve *speed*.
+
+    ``atempo`` only accepts values in [0.5, 2.0], so large or small speed
+    factors require chaining. For example, 4× = ``atempo=2.0,atempo=2.0``.
+    """
+    filters: list[str] = []
+    remaining = speed
+
+    if remaining >= 1.0:
+        while remaining > 2.0:
+            filters.append("atempo=2.0")
+            remaining /= 2.0
+        filters.append(f"atempo={remaining:.6f}")
+    else:
+        while remaining < 0.5:
+            filters.append("atempo=0.5")
+            remaining /= 0.5
+        filters.append(f"atempo={remaining:.6f}")
+
+    return filters
