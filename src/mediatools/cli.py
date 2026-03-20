@@ -105,6 +105,26 @@ def cmd_clip(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_fetch_info(args: argparse.Namespace) -> int:
+    from mediatools.download import fetch_info, DownloadError
+    try:
+        info = fetch_info(args.url)
+    except DownloadError as e:
+        _err(str(e), args.human)
+        return 1
+
+    if args.human:
+        print(f"title:    {info.get('title')}")
+        print(f"creator:  {info.get('creator', {}).get('uploader')}")
+        print(f"duration: {info.get('duration_s')}s")
+        print(f"uploaded: {info.get('upload_date')}")
+        print(f"views:    {info.get('view_count')}")
+        print(f"formats:  {len(info.get('formats', []))}")
+    else:
+        print(json.dumps(info, indent=2, default=str))
+    return 0
+
+
 def cmd_convert(args: argparse.Namespace) -> int:
     from mediatools.convert import convert_audio, ConvertError
     try:
@@ -192,6 +212,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--end-ms", type=int, required=True)
     _add_human(p)
     p.set_defaults(func=cmd_clip)
+
+    # fetch-info
+    p = sub.add_parser("fetch-info", help="Fetch video metadata without downloading")
+    p.add_argument("url")
+    _add_human(p)
+    p.set_defaults(func=cmd_fetch_info)
 
     # convert
     p = sub.add_parser("convert", help="Convert media to an audio format (default: mp3)")

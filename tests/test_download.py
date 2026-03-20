@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
-from mediatools.download import DownloadError, _write_credits, default_downloads_dir, pull_video
+from mediatools.download import DownloadError, _write_credits, default_downloads_dir, fetch_info, pull_video
 
 
 class TestDefaultDownloadsDir(unittest.TestCase):
@@ -123,6 +123,66 @@ class TestPullVideo(unittest.TestCase):
                 pull_video("https://example.com/video", output_dir=tmp)
 
             self.assertIn(tmp, captured_opts[0]["outtmpl"])
+
+
+class TestFetchInfo(unittest.TestCase):
+
+    def _mock_module(self, info_data=None, side_effect=None):
+        mock_ydl = MagicMock()
+        mock_ydl.__enter__ = MagicMock(return_value=mock_ydl)
+        mock_ydl.__exit__ = MagicMock(return_value=False)
+        if side_effect:
+            mock_ydl.extract_info = MagicMock(side_effect=side_effect)
+        else:
+            mock_ydl.extract_info = MagicMock(return_value=info_data or {
+                "title": "Test Video",
+                "uploader": "Test Channel",
+                "channel": "Test Channel",
+                "channel_url": "https://youtube.com/c/test",
+                "upload_date": "20260101",
+                "duration": 120.0,
+                "description": "A description",
+                "webpage_url": "https://youtube.com/watch?v=abc",
+                "extractor": "youtube",
+                "tags": ["tag1"],
+                "view_count": 1000,
+                "like_count": 50,
+                "formats": [],
+            })
+        mock_module = MagicMock()
+        mock_module.YoutubeDL = MagicMock(return_value=mock_ydl)
+        return mock_module
+
+    def test_returns_info_dict(self):
+        with patch.dict("sys.modules", {"yt_dlp": self._mock_module()}):
+            result = fetch_info("https://youtube.com/watch?v=abc")
+        self.assertEqual(result["title"], "Test Video")
+        self.assertEqual(result["source_url"], "https://youtube.com/watch?v=abc")
+        self.assertEqual(result["creator"]["uploader"], "Test Channel")
+        self.assertIn("formats", result)
+
+    def test_yt_dlp_not_installed(self):
+        with patch.dict("sys.modules", {"yt_dlp": None}):
+            with self.assertRaises(DownloadError) as ctx:
+                fetch_info("https://youtube.com/watch?v=abc")
+            self.assertIn("yt-dlp is required", str(ctx.exception))
+
+    def test_error_on_exception(self):
+        mock_module = self._mock_module(side_effect=Exception("not found"))
+        with patch.dict("sys.modules", {"yt_dlp": mock_module}):
+            with self.assertRaises(DownloadError) as ctx:
+                fetch_info("https://youtube.com/watch?v=abc")
+            self.assertIn("could not fetch info", str(ctx.exception))
+
+    def test_no_download_called(self):
+        """extract_info must be called with download=False."""
+        mock_module = self._mock_module()
+        with patch.dict("sys.modules", {"yt_dlp": mock_module}):
+            fetch_info("https://youtube.com/watch?v=abc")
+        ydl_instance = mock_module.YoutubeDL.return_value.__enter__.return_value
+        ydl_instance.extract_info.assert_called_once_with(
+            "https://youtube.com/watch?v=abc", download=False
+        )
 
 
 class TestWriteCredits(unittest.TestCase):

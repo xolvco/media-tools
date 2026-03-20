@@ -65,6 +65,77 @@ def _write_credits(video_path: Path, url: str, info: dict) -> Path:
     return credits_path
 
 
+def fetch_info(url: str) -> dict:
+    """Fetch metadata for a video URL without downloading it.
+
+    Returns a dict with title, creator, duration, upload_date, description,
+    available formats, thumbnail URL, and more — everything yt-dlp knows about
+    the video before any bytes are transferred.
+
+    Useful for previewing before downloading, building playlists, or populating
+    a database without storing the video itself.
+
+    Args:
+        url: Video URL.
+
+    Returns:
+        Dict with provenance fields (same shape as the credits file).
+
+    Raises:
+        DownloadError: if yt-dlp is not installed or the URL cannot be resolved.
+    """
+    try:
+        import yt_dlp
+    except ImportError:
+        raise DownloadError(
+            "yt-dlp is required — install with: pip install yt-dlp"
+        )
+
+    ydl_opts = {"quiet": True, "no_warnings": True, "skip_download": True}
+
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except Exception as exc:
+        raise DownloadError(f"could not fetch info: {exc}") from exc
+
+    if info is None:
+        raise DownloadError(f"no info returned for {url}")
+
+    return {
+        "source_url": url,
+        "title": info.get("title"),
+        "creator": {
+            "uploader": info.get("uploader"),
+            "uploader_url": info.get("uploader_url"),
+            "channel": info.get("channel"),
+            "channel_url": info.get("channel_url"),
+        },
+        "upload_date": info.get("upload_date"),
+        "duration_s": info.get("duration"),
+        "description": info.get("description"),
+        "webpage_url": info.get("webpage_url"),
+        "thumbnail": info.get("thumbnail"),
+        "extractor": info.get("extractor"),
+        "tags": info.get("tags") or [],
+        "view_count": info.get("view_count"),
+        "like_count": info.get("like_count"),
+        "license": info.get("license"),
+        "formats": [
+            {
+                "format_id": f.get("format_id"),
+                "ext": f.get("ext"),
+                "resolution": f.get("resolution"),
+                "fps": f.get("fps"),
+                "vcodec": f.get("vcodec"),
+                "acodec": f.get("acodec"),
+                "filesize": f.get("filesize"),
+            }
+            for f in info.get("formats", [])
+        ],
+    }
+
+
 def pull_video(
     url: str,
     output_dir: str | Path | None = None,
