@@ -52,6 +52,24 @@ def cmd_clip(args: argparse.Namespace) -> int:
         return 1
 
 
+def cmd_pull_video(args: argparse.Namespace) -> int:
+    from mediatools.download import pull_video, DownloadError, default_downloads_dir
+    dest = args.output_dir or default_downloads_dir()
+    print(f"downloading to {dest} ...")
+    try:
+        out = pull_video(
+            args.url,
+            output_dir=dest,
+            filename=args.filename,
+            quality=args.quality,
+        )
+        print(f"saved {out}")
+        return 0
+    except DownloadError as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mediatools",
@@ -79,6 +97,17 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--start-ms", type=int, required=True)
     p.add_argument("--end-ms", type=int, required=True)
     p.set_defaults(func=cmd_clip)
+
+    # pull-video
+    p = sub.add_parser("pull-video", help="Download a video from a URL")
+    p.add_argument("url")
+    p.add_argument("--output-dir", type=Path, default=None,
+                   help="Destination folder (default: platform Downloads)")
+    p.add_argument("--filename", default=None,
+                   help="Output filename without extension (default: video title)")
+    p.add_argument("--quality", default="bestvideo+bestaudio/best",
+                   help="yt-dlp format selector (default: best)")
+    p.set_defaults(func=cmd_pull_video)
 
     return parser
 
