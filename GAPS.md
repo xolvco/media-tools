@@ -9,8 +9,8 @@ Status: manual — updated at the end of each feature
 
 | Stage | What shipped |
 | --- | --- |
-| Python library | `probe`, `extract_audio`, `clip`, `pull_video`, `MediaFile` |
-| Tests | 31 tests, all mocked (no real media files needed) |
+| Python library | `probe`, `extract_audio`, `clip`, `pull_video`, `convert_audio`, `generate_thumbnails`, `generate_thumbnails_at`, `extract_frames`, `MediaFile` |
+| Tests | 71 tests, all mocked (no real media files needed) |
 | CLI | All commands, JSON default output, `--human` flag |
 | Shell scripts | `pull_video.sh` (bash), `pull_video.ps1` (PowerShell) — JSON-parsing, chainable |
 | User docs | MkDocs site — getting started, guide, authentication, scripts, workflows, reference |
@@ -76,6 +76,64 @@ printing to stderr; leave JSON stdout clean.
 **What's missing:** no `pull_videos(urls, ...)` for downloading a list
 **To do:** thin wrapper over `pull_video` in a loop; returns `list[Path]`;
 CLI: `mediatools pull-video --batch urls.txt`.
+
+### Video validation and repair
+
+**What's missing:** no way to check whether a video file is corrupt or truncated.
+**To do:** `validate_video(path) -> ValidationResult` — runs ffprobe + a fast ffmpeg
+decode pass; returns `{valid, errors, warnings, duration_ms, ...}`. If repair is
+possible (missing moov atom, broken index), call `ffmpeg -i in -c copy out` (remux
+without re-encode).  CLI: `mediatools validate video.mp4` / `mediatools repair video.mp4 out.mp4`.
+
+### Video normalization (same size + aspect ratio)
+
+**What's missing:** when assembling clips from multiple sources they often differ in
+resolution, aspect ratio, FPS, and color space.
+**To do:** `normalize_video(input, output, *, width, height, fps, ...)` — scales
+(letterbox / crop / pad), sets FPS, converts color. Uses `-vf scale+pad` or
+`-vf scale,setsar=1`. CLI: `mediatools normalize video.mp4 --width 1920 --height 1080 --fps 30`.
+
+### Video concatenation with transitions
+
+**What's missing:** no way to join multiple clips into one output.
+**To do:** `concat_videos(inputs, output, *, gap_s=0, gap_fill="black"|"white"|Path) -> Path`.
+Inserts a gap clip (solid color or image) of `gap_s` seconds between each input.
+Output has chapter markers (ffmetadata) at each join point.
+CLI: `mediatools concat clip1.mp4 clip2.mp4 clip3.mp4 --output reel.mp4 --gap-s 2 --gap-fill black`.
+
+### Title cards
+
+**What's missing:** formatted overlay or pre-clip with title text (product name, actor name, scene).
+**To do:** `add_title_card(input, output, text, *, duration_s=3, font_size=48, ...)`.
+Uses `ffmpeg drawtext` or prepends a generated title clip.  Can be composed with
+`concat_videos` to produce `[title_card, clip1, title_card2, clip2, ...]`.
+
+### "Interesting parts" detection
+
+**What's missing:** no automated segment selection based on motion or audio energy.
+This is the core of the forgegen use case: take a long video, find the high-motion
+windows, extract them as clips for assembly.
+**To do (two-stage approach):**
+
+1. `extract_frames(fps=2.0)` — already shipped
+2. `detect_motion_segments(frames, ...)` — compute frame-to-frame diff scores;
+   return `list[Segment(start_ms, end_ms, score)]` ranked by activity
+3. `select_best_segments(segments, ...)` — apply min_duration, max_count, dedup
+
+**Dependencies:** numpy (frame diff), optional OpenCV for optical flow.
+
+### Scripting external editors (DaVinci Resolve, Topaz, Premiere)
+
+**What's missing:** no EDL/XML/script export for non-linear editors.
+**To do (exploratory):**
+
+- EDL export: CMX 3600 format; supported by Resolve, Premiere, Avid
+- DaVinci Resolve scripting: Python API (`DaVinciResolveScript`); can import
+  bins, create timelines, apply color grades
+- Topaz Video AI: command-line `topazai` — enhance, upscale, slow-mo
+
+**Approach:** generate a `resolve_script.py` from the assembled clip list;
+user runs it inside Resolve.
 
 ### Agentic tool interface (v2)
 

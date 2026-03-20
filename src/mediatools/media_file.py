@@ -79,6 +79,26 @@ class MediaFile:
         from mediatools.video import clip
         return clip(self.path, output, start_ms=start_ms, end_ms=end_ms, **kwargs)
 
+    def extract_frames(
+        self,
+        output_dir: str | "Path | None" = None,
+        *,
+        fps: float | None = None,
+        start_ms: int | None = None,
+        end_ms: int | None = None,
+        width: int | None = None,
+        height: int | None = None,
+        fmt: str = "png",
+        **kwargs,
+    ) -> list:
+        """Extract frames for analysis or assembly.  See :func:`mediatools.video.extract_frames`."""
+        from mediatools.video import extract_frames
+        return extract_frames(
+            self.path, output_dir,
+            fps=fps, start_ms=start_ms, end_ms=end_ms,
+            width=width, height=height, fmt=fmt, **kwargs,
+        )
+
     def generate_thumbnails_at(
         self,
         timestamps: list[int] | str | Path,

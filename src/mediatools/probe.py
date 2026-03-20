@@ -17,6 +17,7 @@ class StreamInfo:
     sample_rate: int | None   # audio only
     channels: int | None      # audio only
     duration_s: float | None
+    fps: float | None = None  # video only — frames per second (from r_frame_rate)
 
 
 @dataclass
@@ -91,6 +92,17 @@ def probe(path: str | Path, timeout: float = 10.0) -> ProbeResult:
         if codec_type not in ("video", "audio"):
             continue
         dur = s.get("duration")
+        fps = None
+        if codec_type == "video":
+            r = s.get("r_frame_rate", "")
+            if "/" in r:
+                n, d = r.split("/", 1)
+                fps = float(n) / float(d) if float(d) else None
+            elif r:
+                try:
+                    fps = float(r)
+                except ValueError:
+                    pass
         streams.append(StreamInfo(
             codec_type=codec_type,
             codec_name=s.get("codec_name", ""),
@@ -99,6 +111,7 @@ def probe(path: str | Path, timeout: float = 10.0) -> ProbeResult:
             sample_rate=int(s["sample_rate"]) if s.get("sample_rate") else None,
             channels=s.get("channels"),
             duration_s=float(dur) if dur else None,
+            fps=fps,
         ))
 
     return ProbeResult(

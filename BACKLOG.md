@@ -7,6 +7,88 @@ Items at the top are closest to ready. Items at the bottom are future/explorator
 
 ## Ready to build
 
+### Video validation and repair
+
+Check whether a video file is corrupt, truncated, or has a broken index.
+Attempt remux repair (no re-encode) where possible.
+
+```python
+from mediatools.video import validate_video, repair_video
+
+result = validate_video("clip.mp4")
+# {"valid": False, "errors": ["moov atom missing"], "duration_ms": 0}
+
+repair_video("clip.mp4", "clip_fixed.mp4")
+```
+
+CLI:
+```bash
+mediatools validate clip.mp4
+mediatools repair clip.mp4 clip_fixed.mp4
+```
+
+---
+
+### Video normalization
+
+Normalize resolution, aspect ratio, FPS, and pixel format across multiple source
+clips before concatenation. Uses letterbox/pad to avoid distortion.
+
+```python
+from mediatools.video import normalize_video
+
+normalize_video("clip.mp4", "clip_norm.mp4", width=1920, height=1080, fps=30)
+```
+
+CLI:
+```bash
+mediatools normalize clip.mp4 --width 1920 --height 1080 --fps 30
+```
+
+---
+
+### Video concatenation with gap and markers
+
+Join multiple normalized clips into one output. Optional gap clip (solid color or
+image) between each source. Writes ffmetadata chapter markers at each join point.
+
+```python
+from mediatools.video import concat_videos
+
+concat_videos(
+    ["clip1.mp4", "clip2.mp4", "clip3.mp4"],
+    "reel.mp4",
+    gap_s=2.0,
+    gap_fill="black",   # "black", "white", or Path to image
+)
+```
+
+CLI:
+```bash
+mediatools concat clip1.mp4 clip2.mp4 clip3.mp4 \
+  --output reel.mp4 --gap-s 2 --gap-fill black
+```
+
+Returns `{output, duration_ms, segment_count, markers: [{label, start_ms}]}`.
+
+---
+
+### Title cards
+
+Prepend a formatted title clip to each source segment before concatenation.
+Uses `ffmpeg drawtext` or generates a solid-color clip with text overlay.
+
+```python
+from mediatools.video import add_title_card
+
+add_title_card("clip.mp4", "clip_titled.mp4", text="VictoriaOaks — Scene 3",
+               duration_s=3, font_size=48)
+```
+
+Composable with `concat_videos`: build `[title1, clip1, title2, clip2, ...]` then concat.
+
+---
+
 ### Audio format conversion
 
 Add `--audio-format` to `pull_video()` so users can request mp3, m4a, flac, wav
@@ -112,6 +194,41 @@ Add `fps`, `bit_rate` to `StreamInfo` and probe output.
 ---
 
 ## Future / exploratory
+
+### "Interesting parts" detection (forgegen integration)
+
+Given a set of source videos, find high-motion or high-energy windows automatically.
+Feed the results directly into `concat_videos` to produce a highlights reel without
+manual editing.
+
+```python
+from mediatools.video import extract_frames, detect_motion_segments, select_best_segments
+
+frames = extract_frames("long_video.mp4", fps=2.0)
+segments = detect_motion_segments(frames)
+best = select_best_segments(segments, max_count=10, min_duration_ms=3000)
+# best = [Segment(start_ms=12400, end_ms=18700, score=0.87), ...]
+```
+
+Then `clip()` each segment and `concat_videos()` the results.
+**Dependencies:** numpy for frame diff; optional OpenCV for optical flow.
+
+---
+
+### External editor scripting (DaVinci Resolve, Topaz, Premiere)
+
+Generate EDL (CMX 3600) or DaVinci Resolve Python scripts from a clip list.
+Enables taking a media-tools assembly into a full NLE for color grading,
+effects, or Topaz Video AI upscaling.
+
+```python
+from mediatools.export import to_edl, to_resolve_script
+
+to_edl(clip_list, "assembly.edl")
+to_resolve_script(clip_list, "import_into_resolve.py")
+```
+
+---
 
 ### Agentic tool interface (v2)
 

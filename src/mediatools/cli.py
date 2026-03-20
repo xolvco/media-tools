@@ -105,6 +105,32 @@ def cmd_clip(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_extract_frames(args: argparse.Namespace) -> int:
+    from mediatools.video import extract_frames, VideoError
+    try:
+        frames = extract_frames(
+            args.input,
+            args.output_dir,
+            fps=args.fps,
+            start_ms=args.start_ms,
+            end_ms=args.end_ms,
+            width=args.width,
+            height=args.height,
+            fmt=args.fmt,
+        )
+    except (FileNotFoundError, ValueError, VideoError) as e:
+        _err(str(e), args.human)
+        return 1
+
+    _out({
+        "count": len(frames),
+        "fps": args.fps,
+        "frames": [{"index": f.index, "timestamp_ms": f.timestamp_ms, "path": str(f.path)}
+                   for f in frames],
+    }, args.human)
+    return 0
+
+
 def cmd_thumbnails_at(args: argparse.Namespace) -> int:
     from mediatools.thumbnails import generate_thumbnails_at, ThumbnailError
     try:
@@ -253,6 +279,25 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--end-ms", type=int, required=True)
     _add_human(p)
     p.set_defaults(func=cmd_clip)
+
+    # extract-frames
+    p = sub.add_parser("extract-frames",
+                       help="Extract frames for analysis or assembly pipelines")
+    p.add_argument("input", type=Path)
+    p.add_argument("--output-dir", type=Path, default=None,
+                   help="Destination folder (default: frames/ next to input)")
+    p.add_argument("--fps", type=float, default=None,
+                   help="Frames per second to extract (default: native fps)")
+    p.add_argument("--start-ms", type=int, default=None)
+    p.add_argument("--end-ms", type=int, default=None)
+    p.add_argument("--width", type=int, default=None,
+                   help="Output width (-1 = preserve aspect)")
+    p.add_argument("--height", type=int, default=None,
+                   help="Output height (-1 = preserve aspect)")
+    p.add_argument("--fmt", default="png", choices=["png", "jpg"],
+                   help="Output image format (default: png)")
+    _add_human(p)
+    p.set_defaults(func=cmd_extract_frames)
 
     # thumbnails-at
     p = sub.add_parser("thumbnails-at",

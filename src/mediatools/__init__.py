@@ -5,10 +5,12 @@ from mediatools.download import fetch_info, pull_video
 from mediatools.media_file import MediaFile
 from mediatools.probe import probe
 from mediatools.thumbnails import generate_thumbnails, generate_thumbnails_at
+from mediatools.video import FrameInfo, extract_frames
 
 __all__ = [
     "MediaFile", "probe", "pull_video", "fetch_info",
     "convert_to_mp3", "convert_audio",
     "generate_thumbnails", "generate_thumbnails_at",
+    "extract_frames", "FrameInfo",
 ]
 __version__ = "0.1.0"
