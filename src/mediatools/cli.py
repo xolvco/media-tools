@@ -105,6 +105,27 @@ def cmd_clip(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_thumbnails_at(args: argparse.Namespace) -> int:
+    from mediatools.thumbnails import generate_thumbnails_at, ThumbnailError
+    try:
+        result = generate_thumbnails_at(
+            args.input,
+            args.timestamps,
+            args.output_dir,
+            timestamp_key=args.timestamp_key,
+            zip_output=args.zip,
+        )
+    except (FileNotFoundError, ValueError, ThumbnailError) as e:
+        _err(str(e), args.human)
+        return 1
+
+    if args.zip:
+        _out({"zip": str(result)}, args.human)
+    else:
+        _out({"count": len(result), "paths": [str(p) for p in result]}, args.human)
+    return 0
+
+
 def cmd_thumbnails(args: argparse.Namespace) -> int:
     from mediatools.thumbnails import generate_thumbnails, ThumbnailError
     try:
@@ -232,6 +253,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--end-ms", type=int, required=True)
     _add_human(p)
     p.set_defaults(func=cmd_clip)
+
+    # thumbnails-at
+    p = sub.add_parser("thumbnails-at",
+                       help="Extract PNG thumbnails at specific timestamps from a JSON file")
+    p.add_argument("input", type=Path)
+    p.add_argument("timestamps", type=Path,
+                   help="JSON file containing a 'timestamps' key (ms values or {ms, label} dicts)")
+    p.add_argument("--output-dir", type=Path, default=None)
+    p.add_argument("--timestamp-key", default="timestamps",
+                   help="Key to read from the JSON file (default: timestamps)")
+    p.add_argument("--zip", action="store_true", help="Zip all thumbnails on completion")
+    _add_human(p)
+    p.set_defaults(func=cmd_thumbnails_at)
 
     # thumbnails
     p = sub.add_parser("thumbnails", help="Extract PNG thumbnails at regular intervals")

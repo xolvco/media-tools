@@ -79,6 +79,17 @@ class MediaFile:
         from mediatools.video import clip
         return clip(self.path, output, start_ms=start_ms, end_ms=end_ms, **kwargs)
 
+    def generate_thumbnails_at(
+        self,
+        timestamps: list[int] | str | Path,
+        output_dir: str | Path | None = None,
+        **kwargs,
+    ) -> list[Path] | Path:
+        """Generate thumbnails at specific timestamps (ms list or JSON file).
+        See :func:`mediatools.thumbnails.generate_thumbnails_at`."""
+        from mediatools.thumbnails import generate_thumbnails_at
+        return generate_thumbnails_at(self.path, timestamps, output_dir, **kwargs)
+
     def generate_thumbnails(
         self,
         output_dir: str | Path | None = None,
