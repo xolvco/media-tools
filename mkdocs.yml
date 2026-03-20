@@ -63,6 +63,7 @@ nav:
   - Getting Started: getting-started.md
   - Guide:
     - Downloading Videos: guide/pull-video.md
+    - Assembling a Reel: guide/assembly.md
     - YouTube Authentication: guide/authentication.md
     - Shell Scripts: guide/scripts.md
     - Chaining Workflows: guide/workflows.md
