@@ -68,20 +68,24 @@ CMD=(mediatools pull-video "$URL")
 
 # ── run ──────────────────────────────────────────────────────────────────────
 echo "Downloading: $URL" >&2
-OUTPUT=$("${CMD[@]}" 2>&1)
+JSON=$("${CMD[@]}" 2>&1)
 EXIT_CODE=$?
 
 if [[ $EXIT_CODE -ne 0 ]]; then
-    echo "Error: $OUTPUT" >&2
+    echo "Error: $JSON" >&2
     exit 1
 fi
 
-# Extract the saved path from "saved <path>" line
-SAVED_PATH=$(echo "$OUTPUT" | grep -oP '(?<=saved ).*' | tail -1)
+# Parse path from JSON output — use jq if available, else Python
+if command -v jq &>/dev/null; then
+    SAVED_PATH=$(echo "$JSON" | jq -r '.path')
+else
+    SAVED_PATH=$(echo "$JSON" | python3 -c "import sys,json; print(json.load(sys.stdin)['path'])")
+fi
 
-if [[ -z "$SAVED_PATH" ]]; then
-    echo "Download completed but could not determine output path." >&2
-    echo "$OUTPUT" >&2
+if [[ -z "$SAVED_PATH" || "$SAVED_PATH" == "null" ]]; then
+    echo "Download completed but could not parse output path." >&2
+    echo "$JSON" >&2
     exit 1
 fi
 

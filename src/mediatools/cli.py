@@ -1,29 +1,78 @@
-"""mediatools CLI — thin wrapper over the library API."""
+"""mediatools CLI — thin wrapper over the library API.
+
+Output format: JSON by default (machine-readable, agentic-friendly).
+Use --human for human-readable text output.
+
+Error output always goes to stderr.  Exit code 0 = success, 1 = error.
+"""
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
+
+# ── output helpers ────────────────────────────────────────────────────────────
+
+def _out(data: dict, human: bool) -> None:
+    """Print *data* as JSON (default) or human-readable text."""
+    if human:
+        for k, v in data.items():
+            print(f"{k}: {v}")
+    else:
+        print(json.dumps(data, indent=2, default=str))
+
+
+def _err(message: str, human: bool) -> None:
+    """Print an error — always to stderr, always as the right format."""
+    if human:
+        print(f"error: {message}", file=sys.stderr)
+    else:
+        print(json.dumps({"error": message}), file=sys.stderr)
+
+
+# ── commands ──────────────────────────────────────────────────────────────────
 
 def cmd_probe(args: argparse.Namespace) -> int:
     from mediatools.probe import probe, ProbeError
     try:
         info = probe(args.path)
     except (FileNotFoundError, ProbeError) as e:
-        print(f"error: {e}", file=sys.stderr)
+        _err(str(e), args.human)
         return 1
 
-    print(f"path:     {info.path}")
-    print(f"duration: {info.duration_ms} ms ({info.duration_s:.2f}s)")
-    print(f"format:   {info.format_name}")
-    print(f"size:     {info.size_bytes:,} bytes")
+    streams = []
     for s in info.streams:
+        entry = {"codec_type": s.codec_type, "codec_name": s.codec_name}
         if s.codec_type == "video":
-            print(f"video:    {s.codec_name} {s.width}x{s.height}")
+            entry.update({"width": s.width, "height": s.height})
         elif s.codec_type == "audio":
-            print(f"audio:    {s.codec_name} {s.sample_rate}Hz {s.channels}ch")
+            entry.update({"sample_rate": s.sample_rate, "channels": s.channels})
+        streams.append(entry)
+
+    data = {
+        "path": str(info.path),
+        "duration_ms": info.duration_ms,
+        "duration_s": round(info.duration_s, 3),
+        "format": info.format_name,
+        "size_bytes": info.size_bytes,
+        "streams": streams,
+    }
+
+    if args.human:
+        print(f"path:     {info.path}")
+        print(f"duration: {info.duration_ms} ms ({info.duration_s:.2f}s)")
+        print(f"format:   {info.format_name}")
+        print(f"size:     {info.size_bytes:,} bytes")
+        for s in info.streams:
+            if s.codec_type == "video":
+                print(f"video:    {s.codec_name} {s.width}x{s.height}")
+            elif s.codec_type == "audio":
+                print(f"audio:    {s.codec_name} {s.sample_rate}Hz {s.channels}ch")
+    else:
+        print(json.dumps(data, indent=2))
     return 0
 
 
@@ -33,11 +82,13 @@ def cmd_extract_audio(args: argparse.Namespace) -> int:
         out = extract_audio(args.input, args.output,
                             sample_rate=args.sample_rate,
                             channels=args.channels)
-        print(f"wrote {out}")
-        return 0
     except (FileNotFoundError, AudioError) as e:
-        print(f"error: {e}", file=sys.stderr)
+        _err(str(e), args.human)
         return 1
+
+    _out({"path": str(out), "sample_rate": args.sample_rate, "channels": args.channels},
+         args.human)
+    return 0
 
 
 def cmd_clip(args: argparse.Namespace) -> int:
@@ -45,17 +96,21 @@ def cmd_clip(args: argparse.Namespace) -> int:
     try:
         out = clip(args.input, args.output,
                    start_ms=args.start_ms, end_ms=args.end_ms)
-        print(f"wrote {out}")
-        return 0
     except (FileNotFoundError, ValueError, VideoError) as e:
-        print(f"error: {e}", file=sys.stderr)
+        _err(str(e), args.human)
         return 1
+
+    _out({"path": str(out), "start_ms": args.start_ms, "end_ms": args.end_ms},
+         args.human)
+    return 0
 
 
 def cmd_pull_video(args: argparse.Namespace) -> int:
     from mediatools.download import pull_video, DownloadError, default_downloads_dir
+    import json as _json
     dest = args.output_dir or default_downloads_dir()
-    print(f"downloading to {dest} ...")
+    if args.human:
+        print(f"downloading to {dest} ...", file=sys.stderr)
     try:
         out = pull_video(
             args.url,
@@ -65,23 +120,42 @@ def cmd_pull_video(args: argparse.Namespace) -> int:
             cookies=args.cookies,
             cookies_from_browser=args.cookies_from_browser,
         )
-        print(f"saved {out}")
-        return 0
     except DownloadError as e:
-        print(f"error: {e}", file=sys.stderr)
+        _err(str(e), args.human)
         return 1
+
+    # Load credits sidecar if present
+    credits_path = out.with_name(out.stem + ".credits.json")
+    credits = {}
+    if credits_path.exists():
+        try:
+            credits = _json.loads(credits_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    data = {"path": str(out), "credits": credits}
+    _out(data, args.human)
+    return 0
+
+
+# ── parser ────────────────────────────────────────────────────────────────────
+
+def _add_human(p: argparse.ArgumentParser) -> None:
+    p.add_argument("--human", action="store_true",
+                   help="Human-readable text output instead of JSON")
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mediatools",
-        description="Media processing utilities",
+        description="Media processing utilities — JSON output by default",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
     # probe
     p = sub.add_parser("probe", help="Show metadata for a media file")
     p.add_argument("path", type=Path)
+    _add_human(p)
     p.set_defaults(func=cmd_probe)
 
     # extract-audio
@@ -90,6 +164,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("output", type=Path)
     p.add_argument("--sample-rate", type=int, default=44100)
     p.add_argument("--channels", type=int, default=2)
+    _add_human(p)
     p.set_defaults(func=cmd_extract_audio)
 
     # clip
@@ -98,6 +173,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("output", type=Path)
     p.add_argument("--start-ms", type=int, required=True)
     p.add_argument("--end-ms", type=int, required=True)
+    _add_human(p)
     p.set_defaults(func=cmd_clip)
 
     # pull-video
@@ -114,6 +190,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--cookies-from-browser", default=None,
                    metavar="BROWSER",
                    help="Extract cookies from browser: chrome, firefox, edge, safari")
+    _add_human(p)
     p.set_defaults(func=cmd_pull_video)
 
     return parser

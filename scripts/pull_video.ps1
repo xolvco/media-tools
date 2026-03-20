@@ -84,14 +84,19 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Extract the saved path from "saved <path>" line
-$saved_line = $output | Select-String -Pattern "^saved (.+)$"
-if (-not $saved_line) {
-    Write-Error "Download completed but could not determine output path.`n$output"
+# Parse path from JSON output
+try {
+    $result = $output | ConvertFrom-Json
+    $saved_path = $result.path
+} catch {
+    Write-Error "Could not parse JSON output:`n$output"
     exit 1
 }
 
-$saved_path = $saved_line.Matches[0].Groups[1].Value.Trim()
+if (-not $saved_path) {
+    Write-Error "Download completed but path not found in output.`n$output"
+    exit 1
+}
 
 Write-Host "Saved: $saved_path" -ForegroundColor Green
 
