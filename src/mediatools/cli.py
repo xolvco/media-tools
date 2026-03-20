@@ -105,6 +105,23 @@ def cmd_clip(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_convert(args: argparse.Namespace) -> int:
+    from mediatools.convert import convert_audio, ConvertError
+    try:
+        out = convert_audio(
+            args.input,
+            args.output,
+            fmt=args.format,
+            bitrate=args.bitrate,
+        )
+    except (FileNotFoundError, ValueError, ConvertError) as e:
+        _err(str(e), args.human)
+        return 1
+
+    _out({"path": str(out), "format": args.format, "bitrate": args.bitrate}, args.human)
+    return 0
+
+
 def cmd_pull_video(args: argparse.Namespace) -> int:
     from mediatools.download import pull_video, DownloadError, default_downloads_dir
     import json as _json
@@ -175,6 +192,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--end-ms", type=int, required=True)
     _add_human(p)
     p.set_defaults(func=cmd_clip)
+
+    # convert
+    p = sub.add_parser("convert", help="Convert media to an audio format (default: mp3)")
+    p.add_argument("input", type=Path)
+    p.add_argument("output", type=Path, nargs="?", default=None,
+                   help="Output path (default: input filename with new extension)")
+    p.add_argument("--format", default="mp3",
+                   choices=["mp3", "m4a", "wav", "flac", "ogg", "opus"],
+                   help="Output format (default: mp3)")
+    p.add_argument("--bitrate", default="320k",
+                   help="Audio bitrate (default: 320k)")
+    _add_human(p)
+    p.set_defaults(func=cmd_convert)
 
     # pull-video
     p = sub.add_parser("pull-video", help="Download a video from a URL")

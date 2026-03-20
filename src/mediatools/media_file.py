@@ -64,6 +64,16 @@ class MediaFile:
         from mediatools.audio import extract_audio
         return extract_audio(self.path, output, **kwargs)
 
+    def convert_to_mp3(self, output: str | Path | None = None, **kwargs) -> Path:
+        """Convert to MP3.  See :func:`mediatools.convert.convert_to_mp3`."""
+        from mediatools.convert import convert_to_mp3
+        return convert_to_mp3(self.path, output, **kwargs)
+
+    def convert_audio(self, output: str | Path | None = None, fmt: str = "mp3", **kwargs) -> Path:
+        """Convert to an audio format.  See :func:`mediatools.convert.convert_audio`."""
+        from mediatools.convert import convert_audio
+        return convert_audio(self.path, output, fmt=fmt, **kwargs)
+
     def clip(self, output: str | Path, start_ms: int, end_ms: int, **kwargs) -> Path:
         """Clip the file from *start_ms* to *end_ms*.  See :func:`mediatools.video.clip`."""
         from mediatools.video import clip
