@@ -1,0 +1,79 @@
+site_name: mediatools
+site_description: Reusable media processing utilities — probe, download, clip, extract audio.
+site_url: https://xolvco.github.io/media-tools
+repo_url: https://github.com/xolvco/media-tools
+repo_name: xolvco/media-tools
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: deep purple
+      accent: deep orange
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: deep purple
+      accent: deep orange
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  font:
+    text: Inter
+    code: JetBrains Mono
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+    - toc.follow
+
+plugins:
+  - search
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Guide:
+    - Downloading Videos: guide/pull-video.md
+    - YouTube Authentication: guide/authentication.md
+    - Shell Scripts: guide/scripts.md
+    - Chaining Workflows: guide/workflows.md
+  - Reference:
+    - CLI: reference/cli.md
+    - Python API: reference/api.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/xolvco/media-tools
+  generator: false
+
+copyright: "&copy; 2026 Xolvco. Licensed under the MIT License."
