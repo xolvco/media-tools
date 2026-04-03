@@ -1,6 +1,13 @@
 # mediatools
 
-Reusable media processing utilities built on ffmpeg/ffprobe.
+`mediatools` is now a deprecated compatibility wrapper around `videoedit`.
+
+Use `videoedit` for new work:
+
+- repo: `https://github.com/xolvco/videoedit`
+- package: `videoedit`
+
+This repo continues to exist so older imports and scripts keep working during the migration, but it is no longer the canonical implementation.
 
 ## Install
 
@@ -14,18 +21,21 @@ pip install git+https://github.com/xolvco/media-tools.git
 
 ### Python API
 
+Compatibility import:
+
 ```python
 from mediatools import MediaFile
+```
 
-mf = MediaFile("video.mp4")
-print(mf.duration_ms)       # 183400
-print(mf.has_audio)         # True
+Preferred new import:
 
-mf.extract_audio("audio.wav")
-mf.clip("clip.mp4", start_ms=30_000, end_ms=75_000)
+```python
+from videoedit.media import MediaFile
 ```
 
 ### CLI
+
+Compatibility commands still work:
 
 ```bash
 mediatools probe video.mp4
@@ -33,6 +43,12 @@ mediatools extract-audio video.mp4 audio.wav
 mediatools clip video.mp4 clip.mp4 --start-ms 30000 --end-ms 75000
 ```
 
+## Compatibility policy
+
+- compatibility is still maintained for now
+- new behavior should land in `videoedit`, not here
+- this repo should stay small and wrapper-focused
+
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).
