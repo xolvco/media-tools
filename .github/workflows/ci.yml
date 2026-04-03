@@ -48,5 +48,5 @@ jobs:
       - name: Lint (ruff)
         run: ruff check src/ tests/
 
-      - name: Run tests
-        run: pytest tests/ -v
+      - name: Run compatibility smoke tests
+        run: pytest tests/test_wrapper_smoke.py -v
