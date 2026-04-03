@@ -11,7 +11,6 @@ license = { file = "LICENSE" }
 authors = [{ name = "Xolvco", email = "bruce@xolv.co" }]
 requires-python = ">=3.11"
 dependencies = [
-    "videoedit @ git+https://github.com/xolvco/videoedit.git@main",
 ]  # ffprobe/ffmpeg expected on PATH
 
 [project.optional-dependencies]
